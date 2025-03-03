@@ -1,2 +1,2 @@
 # fmg-get-fgt-revisions
-Download FortiGate revisions from FortiManager since a given date
+This script connects to a FortiManager instance and retrieves configuration revisions from all FortiGates in all ADOMs. It saves each configuration as a .conf file in directories organized by ADOM. The script supports filtering revisions from a specific start date and securely loads the API key and settings from an external 'config.env' file.
