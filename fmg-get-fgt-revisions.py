@@ -1,50 +1,61 @@
 """
-Script Name: FortiGate Revision Backup Script
+Script Name: FortiManager Configuration Backup Script
 Author: Prithvi Mandava
 Date: 2025-03-03
 Description:
     This script connects to a FortiManager instance and retrieves configuration revisions
     from all FortiGates in all ADOMs. It saves each configuration as a .conf file in 
     directories organized by ADOM. The script supports filtering revisions from a 
-    specific start date and securely loads the API key from an external 'config.env' file.
+    specific start date and securely loads the API key and settings from an external 
+    'config.env' file.
     
-Version: 1.0
+Version: 1.1
 
 Requirements:
     - Python 3.x
     - requests library (`pip install requests`)
     - python-dotenv library (`pip install python-dotenv`)
-    - Config file: `config.env` containing `FMG_API_KEY=<your_api_key>`
+    - Config file: `config.env` containing:
+        FMG_API_KEY=your_actual_api_key_here
+        FMG_IP=192.168.1.99
+        ADOM_FILTER_DATE=2025-03-03
 """
 
 import requests
 import json
 import os
 from datetime import datetime
-from configparser import ConfigParser
+from dotenv import load_dotenv
 
-# Load API key from external config file
+# Load environment variables from config.env
 config_file = "config.env"
-config = ConfigParser()
+load_dotenv(config_file)
 
-# Check if the configuration file exists
-if not os.path.exists(config_file):
-    print(f"Error: Configuration file '{config_file}' not found.")
-    exit(1)
+# Get variables from the environment
+api_key = os.getenv("FMG_API_KEY")
+fmg_ip = os.getenv("FMG_IP")
+adom_filter_date = os.getenv("ADOM_FILTER_DATE")
 
-# Read the configuration file
-config.read(config_file)
-
-# Get the API key from the configuration file
-api_key = config.get("DEFAULT", "FMG_API_KEY", fallback=None)
+# Validate environment variables
 if not api_key:
     print("Error: API key not found in the configuration file.")
     exit(1)
 
-# FortiManager details
-fmg_ip = "192.168.1.99"  # Replace with your FortiManager IP address
-adom_filter_date = "2025-03-03"  # Replace with your desired start date (YYYY-MM-DD)
-adom_filter_datetime = datetime.strptime(adom_filter_date, "%Y-%m-%d")
+if not fmg_ip:
+    print("Error: FortiManager IP address not found in the configuration file.")
+    exit(1)
+
+if not adom_filter_date:
+    print("Error: ADOM filter date not found in the configuration file.")
+    exit(1)
+
+# Parse the filter date
+try:
+    adom_filter_datetime = datetime.strptime(adom_filter_date, "%Y-%m-%d")
+    print(f"ADOM Filter Date: {adom_filter_date}")
+except ValueError:
+    print("Error: Invalid date format for ADOM_FILTER_DATE. Use YYYY-MM-DD format.")
+    exit(1)
 
 # Output directory for config files (relative to the script's directory)
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -65,8 +76,9 @@ def send_request(method, params):
         "params": params,
         "id": 1
     }
+
     response = requests.post(url, headers=headers, data=json.dumps(payload), verify=False)
-    
+
     try:
         response_data = response.json()
         if "result" in response_data:
@@ -147,25 +159,15 @@ def download_config(adom_name, device_name, revision_id, timestamp):
         if "content" in data:
             config_data = data["content"]
             
-            # Create directory for ADOM if it doesn't exist
             adom_dir = os.path.join(output_dir, adom_name)
-            try:
-                os.makedirs(adom_dir, exist_ok=True)
-                print(f"Directory created or exists: {adom_dir}")
-            except Exception as e:
-                print(f"Error creating directory {adom_dir}: {e}")
-                return
+            os.makedirs(adom_dir, exist_ok=True)
             
-            # Generate the filename and save the config
             filename = f"{device_name}_{timestamp}.conf"
             file_path = os.path.join(adom_dir, filename)
             
-            try:
-                with open(file_path, "w") as f:
-                    f.write(config_data)
-                print(f"Configuration saved to {file_path}")
-            except Exception as e:
-                print(f"Error writing configuration to file {file_path}: {e}")
+            with open(file_path, "w") as f:
+                f.write(config_data)
+            print(f"Configuration saved to {file_path}")
         else:
             print(f"Error: 'content' key not found in the response data: {data}")
     else:
@@ -189,6 +191,5 @@ def main():
     if not all_revisions:
         print("No revisions found for the specified date.")
 
-# Run the script
 if __name__ == "__main__":
     main()
